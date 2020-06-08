@@ -1,0 +1,67 @@
+version: '3.5'
+services:
+
+  #PHP Service
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: gamer_php
+    tty: true
+    environment:
+      SERVICE_NAME: app
+      SERVICE_TAGS: dev
+    working_dir: /var/www
+    volumes:
+      - ./:/var/www
+      - ./php/local.ini:/usr/local/etc/php/conf.d/local.ini
+    networks:
+      - app-network
+
+  #Nginx Service
+  webserver:
+    image: nginx:alpine
+    container_name: gamer_webserver
+    tty: true
+    ports:
+      - 4000:80
+      - 4001:443
+    volumes:
+      - ./:/var/www
+      - ./nginx/conf.d/:/etc/nginx/conf.d/
+    networks:
+      - app-network
+
+  #postgres
+  db:
+    container_name: gamer_db
+    image: postgres
+    environment:
+      POSTGRES_DB: gamer
+      POSTGRES_USER: root
+      POSTGRES_PASSWORD: password
+    volumes:
+      - dbdata:/var/lib/postgresql/data
+    ports:
+      - 4002:5432
+    networks:
+      - app-network
+
+  #adminer
+  adminer:
+    image: adminer
+    container_name: gamer_dbAdmin
+    ports:
+      - 4003:8080
+    networks:
+      - app-network
+
+#Docker Networks
+networks:
+  app-network:
+    name: gamer
+    driver: bridge
+#Volumes
+volumes:
+  dbdata:
+    driver: local

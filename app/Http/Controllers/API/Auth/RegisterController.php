@@ -1,15 +1,20 @@
 <?php
 
-namespace App\Http\Controllers\Auth;
+namespace App\Http\Controllers\API\Auth;
 
-use App\Http\Controllers\Controller;
+use App\Helpers\ResponseHelper;
+use App\Helpers\ResponseMessages;
+use App\Http\Controllers\AppBaseController;
+use App\Models\User;
 use App\Providers\RouteServiceProvider;
-use App\User;
+use Illuminate\Auth\Events\Registered;
 use Illuminate\Foundation\Auth\RegistersUsers;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
+use Tymon\JWTAuth\Facades\JWTAuth;
 
-class RegisterController extends Controller
+class RegisterController extends AppBaseController
 {
     /*
     |--------------------------------------------------------------------------
@@ -42,6 +47,22 @@ class RegisterController extends Controller
     }
 
     /**
+     * Handle a registration request for the application.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @return \Illuminate\Http\Response
+     */
+    public function register(Request $request)
+    {
+        $this->validator($request->all())->validate();
+        event(new Registered($user = $this->create($request->all())));
+
+        $token = auth()->login($user);
+        JWTAuth::setToken($token);
+        return ResponseHelper::createSuccessResponse(['user' => auth()->user()], ResponseMessages::ACTION_SUCCESSFUL);
+    }
+
+    /**
      * Get a validator for an incoming registration request.
      *
      * @param  array  $data
@@ -59,8 +80,8 @@ class RegisterController extends Controller
     /**
      * Create a new user instance after a valid registration.
      *
-     * @param  array  $data
-     * @return \App\User
+     * @param array $data
+     * @return
      */
     protected function create(array $data)
     {

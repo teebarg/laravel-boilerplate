@@ -2,7 +2,14 @@
 
 namespace App\Exceptions;
 
+use App\Helpers\ResponseCodes;
+use App\Helpers\ResponseHelper;
+use App\Helpers\ResponseMessages;
+use Illuminate\Auth\AuthenticationException;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Foundation\Exceptions\Handler as ExceptionHandler;
+use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpKernel\Exception\MethodNotAllowedHttpException;
 use Throwable;
 
 class Handler extends ExceptionHandler
@@ -42,14 +49,43 @@ class Handler extends ExceptionHandler
     /**
      * Render an exception into an HTTP response.
      *
-     * @param  \Illuminate\Http\Request  $request
-     * @param  \Throwable  $exception
+     * @param \Illuminate\Http\Request $request
+     * @param Throwable $e
      * @return \Symfony\Component\HttpFoundation\Response
      *
-     * @throws \Throwable
      */
-    public function render($request, Throwable $exception)
+    public function render($request, Throwable $e)
     {
-        return parent::render($request, $exception);
+        if ($e instanceof CustomException) {
+            return ResponseHelper::createErrorResponse($e->getMessage(), $e->getCode(), [
+                'errors' => $e->getErrorMessages()
+            ]);
+        } elseif ($e instanceof ValidationException) {//handle validation errors
+            $data = ["errors" => $e->validator->getMessageBag()->getMessages()];
+            return ResponseHelper::createErrorResponse(ResponseMessages::FAILED_VALIDATION, ResponseCodes::FAILED_VALIDATION, $data, ResponseCodes::UNPROCESSABLE_ENTITY);
+        } elseif ($e instanceof ModelNotFoundException) {
+            return ResponseHelper::createErrorResponse(
+                ResponseMessages::RESOURCE_NOT_FOUND, ResponseCodes::RESOURCE_NOT_FOUND
+            );
+        } elseif ($e instanceof MethodNotAllowedHttpException) {
+            return ResponseHelper::createErrorResponse(
+                ResponseMessages::ROUTE_NOT_FOUND, ResponseCodes::ROUTE_NOT_FOUND, [], 404
+            );
+        } elseif ($e instanceof DevException) {
+            $data = ['contextData' => $e->getContextData()];
+            return ResponseHelper::createErrorResponse($e->getUserMessage(), $e->getCode(), $data);
+        } elseif ($e instanceof AuthenticationException) {
+            return ResponseHelper::createErrorResponse($e->getMessage(), ResponseCodes::RESOURCE_AUTHORISATION_ERROR, [], ResponseCodes::UNAUTHENTICATED);
+        }elseif ($e instanceof \Spatie\Permission\Exceptions\UnauthorizedException) {
+            return ResponseHelper::createErrorResponse(ResponseMessages::PERMISSION_DENIED, ResponseCodes::PERMISSION_DENIED, [], ResponseCodes::PERMISSION_DENIED);
+        } else {
+            return ResponseHelper::createErrorResponse(
+                ResponseMessages::EXCEPTION_THROWN, ResponseCodes::EXCEPTION_THROWN,
+                [
+                    "error_message" => $e->getMessage(),
+                    "error" => in_array(env('APP_ENV'), ['testing', 'staging', 'local']) ? $e->getTrace() : []
+                ]
+            );
+        }
     }
 }
